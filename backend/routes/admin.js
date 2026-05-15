@@ -69,7 +69,12 @@ router.get('/stats', adminMiddleware, (req, res) => {
     GROUP BY c.id
     ORDER BY c.created_at DESC
   `).all();
-  const topUsers     = db.prepare('SELECT user_id, COALESCE(SUM(amount),0) as balance FROM transactions GROUP BY user_id ORDER BY balance DESC LIMIT 10').all();
+  const sharedDb = require('../../../../shared/users-db').getUsersDb();
+  const topUsersRaw = db.prepare('SELECT user_id, COALESCE(SUM(amount),0) as balance FROM transactions GROUP BY user_id ORDER BY balance DESC LIMIT 10').all();
+  const topUsers = topUsersRaw.map(u => {
+    const info = sharedDb.prepare('SELECT name, instagram FROM users WHERE id=?').get(u.user_id);
+    return { ...u, name: info?.name || null, instagram: info?.instagram || null };
+  });
   const recentClaims = db.prepare(`
     SELECT cl.*, c.name as campaign_name, c.points
     FROM claims cl JOIN campaigns c ON cl.campaign_id = c.id

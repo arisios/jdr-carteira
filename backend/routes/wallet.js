@@ -24,6 +24,41 @@ router.get('/balance', authMiddleware, (req, res) => {
   res.json({ balance: getBalance(req.user.id), user_id: req.user.id });
 });
 
+// Campanhas disponíveis para o usuário (ativas, ainda não coletadas ou allow_multiple)
+router.get('/available', authMiddleware, (req, res) => {
+  const db = getDb();
+  const campaigns = db.prepare(`
+    SELECT c.*, sb.name as system_name
+    FROM campaigns c
+    LEFT JOIN system_budgets sb ON c.system_budget_id = sb.id
+    WHERE c.active = 1
+      AND (c.budget IS NULL OR c.spent < c.budget)
+      AND (
+        c.allow_multiple = 1
+        OR NOT EXISTS (
+          SELECT 1 FROM claims cl
+          WHERE cl.campaign_id = c.id AND cl.user_id = ?
+        )
+      )
+    ORDER BY c.created_at DESC
+  `).all(req.user.id);
+
+  const sponsors = campaigns.filter(c => !c.action_key).map(c => ({
+    id: c.id, name: c.name, description: c.description,
+    points: c.points, nfc_token: c.nfc_token,
+    remaining: c.budget ? c.budget - c.spent : null,
+    type: 'sponsor'
+  }));
+
+  const actions = campaigns.filter(c => c.action_key).map(c => ({
+    id: c.id, name: c.name, action_key: c.action_key,
+    points: c.points, allow_multiple: c.allow_multiple,
+    type: 'action'
+  }));
+
+  res.json({ sponsors, actions });
+});
+
 // Saldo + histórico completo
 router.get('/', authMiddleware, (req, res) => {
   const db = getDb();
