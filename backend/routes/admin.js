@@ -82,12 +82,11 @@ router.get('/stats', adminMiddleware, (req, res) => {
 // ── Campaigns ─────────────────────────────────────────────────────────────────
 
 router.post('/campaigns', adminMiddleware, (req, res) => {
-  const { name, description, points, budget, system_budget_id } = req.body;
+  const { name, description, points, budget, system_budget_id, action_key, allow_multiple } = req.body;
   if (!name?.trim() || !points) return res.status(400).json({ error: 'Nome e pontos obrigatórios' });
 
   const db = getDb();
 
-  // Validar orçamento do sistema se informado
   if (system_budget_id) {
     const sys = db.prepare('SELECT * FROM system_budgets WHERE id=?').get(parseInt(system_budget_id));
     if (!sys) return res.status(404).json({ error: 'Sistema não encontrado' });
@@ -98,10 +97,21 @@ router.post('/campaigns', adminMiddleware, (req, res) => {
     }
   }
 
+  if (action_key?.trim()) {
+    const exists = db.prepare('SELECT id FROM campaigns WHERE action_key=?').get(action_key.trim());
+    if (exists) return res.status(400).json({ error: `action_key '${action_key}' já existe` });
+  }
+
   const nfc_token = crypto.randomBytes(16).toString('hex');
   const result = db.prepare(
-    'INSERT INTO campaigns (name, description, nfc_token, points, budget, system_budget_id) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(name.trim(), description?.trim() || null, nfc_token, parseInt(points), budget ? parseInt(budget) : null, system_budget_id ? parseInt(system_budget_id) : null);
+    'INSERT INTO campaigns (name, description, nfc_token, points, budget, system_budget_id, action_key, allow_multiple) VALUES (?,?,?,?,?,?,?,?)'
+  ).run(
+    name.trim(), description?.trim() || null, nfc_token, parseInt(points),
+    budget ? parseInt(budget) : null,
+    system_budget_id ? parseInt(system_budget_id) : null,
+    action_key?.trim() || null,
+    allow_multiple ? 1 : 0
+  );
 
   const campaign = db.prepare(`
     SELECT c.*, sb.name as system_name FROM campaigns c

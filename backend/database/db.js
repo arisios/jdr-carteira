@@ -62,6 +62,9 @@ function initDb() {
 
   // Migrações seguras
   try { db.exec('ALTER TABLE campaigns ADD COLUMN system_budget_id INTEGER REFERENCES system_budgets(id)'); } catch {}
+  try { db.exec('ALTER TABLE campaigns ADD COLUMN action_key TEXT'); } catch {}
+  try { db.exec('ALTER TABLE campaigns ADD COLUMN allow_multiple INTEGER DEFAULT 0'); } catch {}
+  try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_campaigns_action_key ON campaigns(action_key) WHERE action_key IS NOT NULL'); } catch {}
 
   require('../../../../shared/users-db').getUsersDb();
   console.log('✅ Banco Carteira Junina inicializado');

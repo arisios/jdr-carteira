@@ -39,7 +39,7 @@ export default function AdminPanel() {
   const [sysModal, setSysModal] = useState(false);
   const [qrModal, setQrModal] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [campForm, setCampForm] = useState({ name:'', description:'', points:'1', budget:'', system_budget_id:'' });
+  const [campForm, setCampForm] = useState({ name:'', description:'', points:'1', budget:'', system_budget_id:'', action_key:'', allow_multiple:false });
   const [sysForm, setSysForm] = useState({ name:'', total_budget:'' });
 
   const isMaster = ['admin','master'].includes(user?.role);
@@ -65,9 +65,11 @@ export default function AdminPanel() {
         points: parseInt(campForm.points),
         budget: campForm.budget ? parseInt(campForm.budget) : null,
         system_budget_id: campForm.system_budget_id ? parseInt(campForm.system_budget_id) : null,
+        action_key: campForm.action_key?.trim() || null,
+        allow_multiple: campForm.allow_multiple,
       });
       toast.success('Campanha criada!');
-      setCampModal(false); setCampForm({ name:'', description:'', points:'1', budget:'', system_budget_id:'' });
+      setCampModal(false); setCampForm({ name:'', description:'', points:'1', budget:'', system_budget_id:'', action_key:'', allow_multiple:false });
       fetchStats(true);
     } catch (err) { toast.error(err.response?.data?.error || 'Erro'); }
     finally { setSaving(false); }
@@ -275,6 +277,15 @@ export default function AdminPanel() {
                   <input type="number" min="1" className="input-junina" placeholder="ilimitado" value={campForm.budget} onChange={e=>setCampForm(f=>({...f,budget:e.target.value}))}/>
                 </div>
               </div>
+              <div>
+                <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{color:'#6F2DA8'}}>⚡ Action Key (sistemas)</label>
+                <input className="input-junina font-mono text-sm" placeholder="Ex: certidao, missao, match, mensagem..." value={campForm.action_key} onChange={e=>setCampForm(f=>({...f,action_key:e.target.value}))}/>
+                <p className="text-xs mt-1" style={{color:'rgba(58,31,20,0.4)'}}>Chave usada pelos sistemas para emitir moedas automaticamente</p>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={campForm.allow_multiple} onChange={e=>setCampForm(f=>({...f,allow_multiple:e.target.checked}))} className="accent-purple-600"/>
+                <span className="text-sm font-semibold" style={{color:'#4B1E6D'}}>Permitir múltiplas coletas por usuário</span>
+              </label>
               <div className="flex gap-2 pt-1">
                 <button type="button" onClick={() => setCampModal(false)} className="btn-secondary flex-1 text-sm py-2.5">Cancelar</button>
                 <button type="submit" className="btn-primary flex-1 text-sm py-2.5" disabled={saving}>{saving?<LoadingSpinner size="sm"/>:'Criar'}</button>

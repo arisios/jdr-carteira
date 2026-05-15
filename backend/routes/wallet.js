@@ -77,4 +77,55 @@ router.post('/claim/:token', authMiddleware, (req, res) => {
   res.json({ success: true, points: campaign.points, balance: getBalance(req.user.id), campaign: campaign.name });
 });
 
+// Claim por ação de sistema — chamado pelos backends dos outros sistemas
+// Auth: header X-System-Key com a chave compartilhada
+const SYSTEM_KEY = process.env.WALLET_SYSTEM_KEY || 'juninas-system-key-2026';
+
+router.post('/action-claim', (req, res) => {
+  const key = req.headers['x-system-key'];
+  if (key !== SYSTEM_KEY) return res.status(401).json({ error: 'Chave de sistema inválida' });
+
+  const { user_id, action_key } = req.body;
+  if (!user_id || !action_key) return res.status(400).json({ error: 'user_id e action_key obrigatórios' });
+
+  const db = getDb();
+  const campaign = db.prepare(`
+    SELECT c.*, sb.total_budget as sys_total, sb.used_budget as sys_used
+    FROM campaigns c
+    LEFT JOIN system_budgets sb ON c.system_budget_id = sb.id
+    WHERE c.action_key = ? AND c.active = 1
+  `).get(action_key);
+
+  if (!campaign) return res.status(404).json({ error: `Campanha de ação '${action_key}' não encontrada ou inativa` });
+
+  if (campaign.budget !== null && campaign.spent + campaign.points > campaign.budget)
+    return res.status(400).json({ error: 'Campanha sem orçamento disponível' });
+
+  if (campaign.system_budget_id && campaign.sys_used + campaign.points > campaign.sys_total)
+    return res.status(400).json({ error: 'Sistema sem orçamento disponível' });
+
+  const doTransaction = db.transaction(() => {
+    // allow_multiple: não exige UNIQUE — cada ação gera um crédito independente
+    if (!campaign.allow_multiple) {
+      db.prepare('INSERT INTO claims (user_id, campaign_id, points) VALUES (?,?,?)').run(user_id, campaign.id, campaign.points);
+    }
+    db.prepare('INSERT INTO transactions (user_id, amount, type, description, campaign_id) VALUES (?,?,?,?,?)').run(
+      user_id, campaign.points, 'earn', campaign.name, campaign.id
+    );
+    db.prepare('UPDATE campaigns SET spent = spent + ? WHERE id=?').run(campaign.points, campaign.id);
+    if (campaign.system_budget_id) {
+      db.prepare('UPDATE system_budgets SET used_budget = used_budget + ? WHERE id=?').run(campaign.points, campaign.system_budget_id);
+    }
+  });
+
+  try {
+    doTransaction();
+  } catch (err) {
+    if (err.message?.includes('UNIQUE')) return res.status(200).json({ success: false, reason: 'already_claimed' });
+    throw err;
+  }
+
+  res.json({ success: true, points: campaign.points, balance: getBalance(user_id) });
+});
+
 module.exports = router;
