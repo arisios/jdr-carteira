@@ -61,9 +61,12 @@ router.get('/stats', adminMiddleware, (req, res) => {
   const totalClaims  = db.prepare('SELECT COUNT(*) as c FROM claims').get().c;
   const campaigns    = db.prepare(`
     SELECT c.*, sb.name as system_name,
-      CASE WHEN c.budget IS NOT NULL THEN c.budget - c.spent ELSE NULL END as remaining
+      CASE WHEN c.budget IS NOT NULL THEN c.budget - c.spent ELSE NULL END as remaining,
+      COUNT(cl.id) as claim_count
     FROM campaigns c
     LEFT JOIN system_budgets sb ON c.system_budget_id = sb.id
+    LEFT JOIN claims cl ON cl.campaign_id = c.id
+    GROUP BY c.id
     ORDER BY c.created_at DESC
   `).all();
   const topUsers     = db.prepare('SELECT user_id, COALESCE(SUM(amount),0) as balance FROM transactions GROUP BY user_id ORDER BY balance DESC LIMIT 10').all();

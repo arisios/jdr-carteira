@@ -18,15 +18,73 @@ function QrModal({ campaign, onClose }) {
         <h3 className="font-display text-lg font-bold mb-1" style={{color:'#4B1E6D'}}>{campaign.name}</h3>
         <p className="text-xs mb-4" style={{color:'#C79A3B'}}>+{campaign.points} 🪙 por coleta</p>
         <img src={qrSrc} alt="QR Code" className="w-56 h-56 mx-auto rounded-xl mb-4" style={{border:'2px solid rgba(199,154,59,0.3)'}}/>
-        <div className="rounded-xl p-2 mb-4 text-xs font-mono break-all" style={{background:'rgba(58,31,20,0.04)',color:'rgba(58,31,20,0.5)'}}>
-          {url}
-        </div>
+        <div className="rounded-xl p-2 mb-4 text-xs font-mono break-all" style={{background:'rgba(58,31,20,0.04)',color:'rgba(58,31,20,0.5)'}}>{url}</div>
         <div className="flex gap-2">
-          <button onClick={() => { navigator.clipboard.writeText(url); toast.success('Link copiado!'); }}
-            className="btn-secondary flex-1 text-sm py-2.5">📋 Copiar link</button>
+          <button onClick={() => { navigator.clipboard.writeText(url); toast.success('Link copiado!'); }} className="btn-secondary flex-1 text-sm py-2.5">📋 Copiar link</button>
           <button onClick={onClose} className="btn-primary flex-1 text-sm py-2.5">Fechar</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SponsorCard({ c, onToggle, onDelete, onQr }) {
+  const esgotado = c.budget !== null && c.spent >= c.budget;
+  const pct = c.budget ? Math.min(100, Math.round((c.spent / c.budget) * 100)) : 0;
+  const status = esgotado ? { label:'🔴 Esgotado', color:'#C21874', bg:'rgba(194,24,116,0.1)' }
+    : c.active ? { label:'🟢 Ativo', color:'#007C91', bg:'rgba(0,124,145,0.1)' }
+    : { label:'⚫ Encerrado', color:'rgba(58,31,20,0.4)', bg:'rgba(58,31,20,0.06)' };
+
+  return (
+    <div className="card-junina p-4" style={{border: c.active && !esgotado ? '2px solid rgba(0,124,145,0.2)' : '1px solid rgba(199,154,59,0.2)'}}>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{background:status.bg, color:status.color}}>{status.label}</span>
+            {c.system_name && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{background:'rgba(75,30,109,0.08)',color:'#4B1E6D'}}>{c.system_name}</span>}
+          </div>
+          <p className="font-bold" style={{color:'#3A1F14'}}>{c.name}</p>
+          {c.description && <p className="text-xs mt-0.5" style={{color:'rgba(58,31,20,0.5)'}}>{c.description}</p>}
+        </div>
+        <div className="flex gap-1 shrink-0">
+          <button onClick={() => onQr(c)} className="text-xs px-2.5 py-1.5 rounded-lg font-bold" style={{background:'rgba(199,154,59,0.15)',color:'#C79A3B'}}>QR</button>
+          {!esgotado && (
+            <button onClick={() => onToggle(c)} className="text-xs px-2.5 py-1.5 rounded-lg font-bold"
+              style={{background: c.active?'rgba(194,24,116,0.08)':'rgba(0,124,145,0.1)', color: c.active?'#C21874':'#007C91'}}>
+              {c.active ? 'Encerrar' : 'Reativar'}
+            </button>
+          )}
+          <button onClick={() => onDelete(c)} className="text-xs px-2 py-1.5 rounded-lg" style={{background:'rgba(58,31,20,0.06)',color:'rgba(58,31,20,0.4)'}}>🗑</button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-2 mb-3 text-center">
+        <div className="rounded-lg p-2" style={{background:'rgba(199,154,59,0.08)'}}>
+          <p className="font-black text-sm" style={{color:'#C79A3B'}}>{c.points}</p>
+          <p className="text-xs" style={{color:'rgba(58,31,20,0.4)'}}>moedas/coleta</p>
+        </div>
+        <div className="rounded-lg p-2" style={{background:'rgba(199,154,59,0.08)'}}>
+          <p className="font-black text-sm" style={{color:'#4B1E6D'}}>{c.claim_count || 0}</p>
+          <p className="text-xs" style={{color:'rgba(58,31,20,0.4)'}}>usuários</p>
+        </div>
+        <div className="rounded-lg p-2" style={{background:'rgba(199,154,59,0.08)'}}>
+          <p className="font-black text-sm" style={{color:'#3A1F14'}}>{c.spent}</p>
+          <p className="text-xs" style={{color:'rgba(58,31,20,0.4)'}}>
+            {c.budget ? `de ${c.budget}` : 'emitidas'}
+          </p>
+        </div>
+      </div>
+
+      {/* Barra de progresso (só quando tem budget) */}
+      {c.budget && (
+        <div>
+          <div className="h-2 rounded-full overflow-hidden" style={{background:'rgba(58,31,20,0.08)'}}>
+            <div className="h-full rounded-full transition-all" style={{width:`${pct}%`, background: pct>=100?'#C21874':pct>=75?'#D96C2F':'linear-gradient(90deg,#C79A3B,#D96C2F)'}}/>
+          </div>
+          <p className="text-xs mt-1 text-right" style={{color:'rgba(58,31,20,0.4)'}}>{pct}% utilizado · {c.remaining ?? c.budget - c.spent} restam</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -35,14 +93,14 @@ export default function AdminPanel() {
   const { user, logout } = useAuth();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [campModal, setCampModal] = useState(false);
-  const [sysModal, setSysModal] = useState(false);
   const [qrModal, setQrModal] = useState(null);
+  const [sponsorModal, setSponsorModal] = useState(false);
+  const [actionModal, setActionModal] = useState(false);
+  const [sysModal, setSysModal] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [campForm, setCampForm] = useState({ name:'', description:'', points:'1', budget:'', system_budget_id:'', action_key:'', allow_multiple:false });
+  const [sponsorForm, setSponsorForm] = useState({ name:'', description:'', points:'2', budget:'', system_budget_id:'' });
+  const [actionForm, setActionForm] = useState({ name:'', action_key:'', points:'1', budget:'', allow_multiple:true, system_budget_id:'' });
   const [sysForm, setSysForm] = useState({ name:'', total_budget:'' });
-
-  const isMaster = ['admin','master'].includes(user?.role);
 
   const fetchStats = useCallback(async (silent=false) => {
     if (!silent) setLoading(true);
@@ -57,19 +115,36 @@ export default function AdminPanel() {
     return () => clearInterval(t);
   }, [fetchStats]);
 
-  const handleCreateCamp = async (e) => {
+  const handleCreateSponsor = async (e) => {
     e.preventDefault(); setSaving(true);
     try {
       await api.post('/admin/campaigns', {
-        name: campForm.name, description: campForm.description,
-        points: parseInt(campForm.points),
-        budget: campForm.budget ? parseInt(campForm.budget) : null,
-        system_budget_id: campForm.system_budget_id ? parseInt(campForm.system_budget_id) : null,
-        action_key: campForm.action_key?.trim() || null,
-        allow_multiple: campForm.allow_multiple,
+        name: sponsorForm.name, description: sponsorForm.description,
+        points: parseInt(sponsorForm.points),
+        budget: sponsorForm.budget ? parseInt(sponsorForm.budget) : null,
+        system_budget_id: sponsorForm.system_budget_id ? parseInt(sponsorForm.system_budget_id) : null,
+        action_key: null, allow_multiple: false,
       });
-      toast.success('Campanha criada!');
-      setCampModal(false); setCampForm({ name:'', description:'', points:'1', budget:'', system_budget_id:'', action_key:'', allow_multiple:false });
+      toast.success('Patrocinador criado!');
+      setSponsorModal(false); setSponsorForm({ name:'', description:'', points:'2', budget:'', system_budget_id:'' });
+      fetchStats(true);
+    } catch (err) { toast.error(err.response?.data?.error || 'Erro'); }
+    finally { setSaving(false); }
+  };
+
+  const handleCreateAction = async (e) => {
+    e.preventDefault(); setSaving(true);
+    try {
+      await api.post('/admin/campaigns', {
+        name: actionForm.name,
+        points: parseInt(actionForm.points),
+        budget: actionForm.budget ? parseInt(actionForm.budget) : null,
+        system_budget_id: actionForm.system_budget_id ? parseInt(actionForm.system_budget_id) : null,
+        action_key: actionForm.action_key.trim(),
+        allow_multiple: actionForm.allow_multiple,
+      });
+      toast.success('Ação criada!');
+      setActionModal(false); setActionForm({ name:'', action_key:'', points:'1', budget:'', allow_multiple:true, system_budget_id:'' });
       fetchStats(true);
     } catch (err) { toast.error(err.response?.data?.error || 'Erro'); }
     finally { setSaving(false); }
@@ -87,12 +162,22 @@ export default function AdminPanel() {
   };
 
   const toggleActive = async (c) => { await api.patch(`/admin/campaigns/${c.id}`, { active: !c.active }); fetchStats(true); };
-  const deleteCamp = async (c) => { if (!confirm(`Excluir "${c.name}"?`)) return; await api.delete(`/admin/campaigns/${c.id}`); toast.success('Excluído'); fetchStats(true); };
-  const deleteSys = async (s) => { if (!confirm(`Excluir sistema "${s.name}"?`)) return; try { await api.delete(`/admin/systems/${s.id}`); toast.success('Sistema excluído'); fetchStats(true); } catch (err) { toast.error(err.response?.data?.error || 'Erro'); } };
+  const deleteCamp = async (c) => {
+    if (!confirm(`Excluir "${c.name}"?`)) return;
+    await api.delete(`/admin/campaigns/${c.id}`);
+    toast.success('Excluído'); fetchStats(true);
+  };
+  const deleteSys = async (s) => {
+    if (!confirm(`Excluir sistema "${s.name}"?`)) return;
+    try { await api.delete(`/admin/systems/${s.id}`); toast.success('Sistema excluído'); fetchStats(true); }
+    catch (err) { toast.error(err.response?.data?.error || 'Erro'); }
+  };
 
   if (loading) return <div className="min-h-screen bg-junina flex items-center justify-center"><LoadingSpinner size="lg" text="Carregando..."/></div>;
 
-  const systems = stats?.systems || [];
+  const sponsors = (stats?.campaigns || []).filter(c => !c.action_key);
+  const actions  = (stats?.campaigns || []).filter(c => c.action_key);
+  const systems  = stats?.systems || [];
 
   return (
     <div className="min-h-screen bg-junina flex flex-col">
@@ -103,59 +188,56 @@ export default function AdminPanel() {
             <h1 className="font-display text-xl font-bold" style={{color:'#4B1E6D'}}>Admin · Carteira</h1>
             <p className="text-xs" style={{color:'#C79A3B'}}>@{user?.instagram || user?.name}</p>
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => setCampModal(true)} className="text-xs px-3 py-1.5 rounded-lg font-bold text-white" style={{background:'linear-gradient(135deg,#C79A3B,#D96C2F)'}}>+ Campanha</button>
-            {isMaster && <button onClick={() => setSysModal(true)} className="text-xs px-3 py-1.5 rounded-lg font-bold" style={{background:'rgba(75,30,109,0.1)',color:'#4B1E6D'}}>+ Sistema</button>}
-            <button onClick={logout} className="text-xs font-medium px-2 py-1.5 rounded-lg" style={{color:'#6F2DA8'}}>Sair</button>
+          <div className="flex gap-2 flex-wrap justify-end">
+            <button onClick={() => setSponsorModal(true)} className="text-xs px-3 py-1.5 rounded-lg font-bold text-white" style={{background:'linear-gradient(135deg,#C79A3B,#D96C2F)'}}>+ Patrocinador</button>
+            <button onClick={() => setActionModal(true)} className="text-xs px-3 py-1.5 rounded-lg font-bold" style={{background:'rgba(111,45,168,0.12)',color:'#6F2DA8'}}>⚡ Ação</button>
+            <button onClick={() => setSysModal(true)} className="text-xs px-3 py-1.5 rounded-lg font-bold" style={{background:'rgba(75,30,109,0.1)',color:'#4B1E6D'}}>+ Sistema</button>
+            <button onClick={logout} className="text-xs font-medium px-2 py-1.5 rounded-lg" style={{color:'rgba(58,31,20,0.4)'}}>Sair</button>
           </div>
         </div>
       </header>
 
       <main className="flex-1 px-4 pb-8">
-        <div className="max-w-2xl mx-auto space-y-4">
+        <div className="max-w-2xl mx-auto space-y-5">
 
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-3">
+          {/* Stats globais */}
+          <div className="grid grid-cols-3 gap-2">
             {[
               {emoji:'👥', label:'Usuários', value: stats?.totalUsers || 0},
               {emoji:'🪙', label:'Emitidas', value: stats?.totalEmitted || 0},
               {emoji:'📡', label:'Claims', value: stats?.totalClaims || 0},
             ].map(s => (
-              <div key={s.label} className="card-junina p-4 text-center">
-                <span className="text-2xl block mb-1">{s.emoji}</span>
-                <p className="text-2xl font-black" style={{color:'#4B1E6D'}}>{s.value}</p>
+              <div key={s.label} className="card-junina p-3 text-center">
+                <span className="text-xl block mb-0.5">{s.emoji}</span>
+                <p className="text-xl font-black" style={{color:'#4B1E6D'}}>{s.value}</p>
                 <p className="text-xs" style={{color:'#C79A3B'}}>{s.label}</p>
               </div>
             ))}
           </div>
 
-          {/* Sistemas de orçamento */}
+          {/* Banco Central */}
           {systems.length > 0 && (
             <div className="card-junina p-4">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="font-display font-bold" style={{color:'#4B1E6D'}}>Banco Central</h2>
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{background:'rgba(75,30,109,0.1)',color:'#4B1E6D'}}>
-                  Total: {systems.reduce((a,s) => a + s.total_budget, 0)} 🪙
+                <h2 className="font-display font-bold" style={{color:'#4B1E6D'}}>🏦 Banco Central</h2>
+                <span className="text-xs font-bold" style={{color:'#C79A3B'}}>
+                  {systems.reduce((a,s)=>a+s.total_budget,0)} 🪙 total
                 </span>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {systems.map(s => {
-                  const pct = s.total_budget > 0 ? Math.round((s.used_budget / s.total_budget) * 100) : 0;
+                  const pct = s.total_budget > 0 ? Math.round((s.used_budget/s.total_budget)*100) : 0;
                   return (
                     <div key={s.id} className="rounded-xl p-3" style={{background:'rgba(199,154,59,0.06)',border:'1px solid rgba(199,154,59,0.15)'}}>
-                      <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center justify-between mb-1.5">
                         <div>
                           <p className="font-bold text-sm" style={{color:'#3A1F14'}}>{s.name}</p>
-                          <p className="text-xs" style={{color:'rgba(58,31,20,0.4)'}}>
-                            {s.used_budget}/{s.total_budget} 🪙 usados · {s.available_budget} disponíveis · {s.campaign_count} campanhas
-                          </p>
+                          <p className="text-xs" style={{color:'rgba(58,31,20,0.4)'}}>{s.used_budget}/{s.total_budget} 🪙 · {s.available_budget} disponíveis</p>
                         </div>
-                        {isMaster && (
-                          <button onClick={() => deleteSys(s)} className="text-xs px-2 py-1 rounded-lg" style={{background:'rgba(194,24,116,0.08)',color:'#C21874'}}>🗑</button>
-                        )}
+                        <button onClick={() => deleteSys(s)} className="text-xs px-2 py-1 rounded-lg" style={{background:'rgba(194,24,116,0.08)',color:'#C21874'}}>🗑</button>
                       </div>
-                      <div className="h-2 rounded-full overflow-hidden" style={{background:'rgba(58,31,20,0.08)'}}>
-                        <div className="h-full rounded-full transition-all" style={{width:`${pct}%`,background:pct>90?'#C21874':pct>70?'#D96C2F':'linear-gradient(90deg,#C79A3B,#D96C2F)'}}/>
+                      <div className="h-1.5 rounded-full overflow-hidden" style={{background:'rgba(58,31,20,0.08)'}}>
+                        <div className="h-full rounded-full" style={{width:`${pct}%`,background:pct>90?'#C21874':pct>70?'#D96C2F':'linear-gradient(90deg,#C79A3B,#D96C2F)'}}/>
                       </div>
                     </div>
                   );
@@ -164,53 +246,69 @@ export default function AdminPanel() {
             </div>
           )}
 
-          {/* Campanhas */}
-          <div className="card-junina p-4">
-            <h2 className="font-display font-bold mb-3" style={{color:'#4B1E6D'}}>Campanhas ({stats?.campaigns?.length || 0})</h2>
-            {!stats?.campaigns?.length ? (
-              <div className="text-center py-8"><span className="text-4xl block mb-2">📡</span><p style={{color:'rgba(58,31,20,0.4)'}}>Nenhuma campanha</p></div>
+          {/* Patrocinadores */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-display font-bold text-lg" style={{color:'#4B1E6D'}}>
+                📡 Patrocinadores
+                <span className="ml-2 text-sm font-normal" style={{color:'#C79A3B'}}>({sponsors.length})</span>
+              </h2>
+              <button onClick={() => setSponsorModal(true)} className="text-xs px-3 py-1.5 rounded-lg font-bold text-white" style={{background:'linear-gradient(135deg,#C79A3B,#D96C2F)'}}>+ Novo</button>
+            </div>
+            {sponsors.length === 0 ? (
+              <div className="card-junina p-8 text-center">
+                <span className="text-4xl block mb-2">🏪</span>
+                <p style={{color:'rgba(58,31,20,0.4)'}}>Nenhum patrocinador ainda</p>
+                <button onClick={() => setSponsorModal(true)} className="btn-primary mt-4 text-sm">Criar primeiro patrocinador</button>
+              </div>
             ) : (
               <div className="space-y-3">
-                {stats.campaigns.map(c => (
-                  <div key={c.id} className="rounded-xl p-4" style={{background: c.active?'rgba(0,124,145,0.06)':'rgba(58,31,20,0.04)', border:`1.5px solid ${c.active?'rgba(0,124,145,0.2)':'rgba(58,31,20,0.1)'}`}}>
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                          <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{background:c.active?'rgba(0,124,145,0.15)':'rgba(58,31,20,0.08)',color:c.active?'#007C91':'rgba(58,31,20,0.4)'}}>
-                            {c.active?'🟢 Ativa':'⚫ Inativa'}
-                          </span>
-                          <span className="font-black text-sm" style={{color:'#C79A3B'}}>+{c.points} 🪙</span>
-                          {c.system_name && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{background:'rgba(75,30,109,0.08)',color:'#4B1E6D'}}>{c.system_name}</span>}
-                        </div>
-                        <p className="font-bold text-sm truncate" style={{color:'#3A1F14'}}>{c.name}</p>
-                        {c.description && <p className="text-xs truncate" style={{color:'rgba(58,31,20,0.5)'}}>{c.description}</p>}
-                      </div>
-                      <div className="flex gap-1 shrink-0">
-                        <button onClick={() => setQrModal(c)} className="text-xs px-2 py-1 rounded-lg font-bold" style={{background:'rgba(199,154,59,0.15)',color:'#C79A3B'}}>QR</button>
-                        <button onClick={() => toggleActive(c)} className="text-xs px-2 py-1 rounded-lg" style={{background:c.active?'rgba(58,31,20,0.06)':'rgba(0,124,145,0.1)',color:c.active?'rgba(58,31,20,0.4)':'#007C91'}}>
-                          {c.active?'Pausar':'Ativar'}
-                        </button>
-                        <button onClick={() => deleteCamp(c)} className="text-xs px-2 py-1 rounded-lg" style={{background:'rgba(194,24,116,0.08)',color:'#C21874'}}>🗑</button>
-                      </div>
-                    </div>
-                    <div className="flex gap-3 text-xs" style={{color:'rgba(58,31,20,0.4)'}}>
-                      <span>📡 {c.spent} coletados</span>
-                      {c.budget && <span>💰 {c.budget} total · {c.remaining ?? '?'} restam</span>}
-                    </div>
-                  </div>
-                ))}
+                {sponsors.map(c => <SponsorCard key={c.id} c={c} onToggle={toggleActive} onDelete={deleteCamp} onQr={setQrModal}/>)}
               </div>
             )}
           </div>
 
-          {/* Top usuários */}
+          {/* Ações dos sistemas */}
+          {actions.length > 0 && (
+            <div className="card-junina p-4">
+              <h2 className="font-display font-bold mb-3" style={{color:'#4B1E6D'}}>
+                ⚡ Ações dos Sistemas
+                <span className="ml-2 text-sm font-normal" style={{color:'#C79A3B'}}>({actions.length})</span>
+              </h2>
+              <div className="space-y-2">
+                {actions.map(c => (
+                  <div key={c.id} className="flex items-center justify-between py-2 px-3 rounded-xl" style={{background: c.active?'rgba(111,45,168,0.06)':'rgba(58,31,20,0.03)', border:'1px solid rgba(111,45,168,0.1)'}}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-xs font-bold" style={{color: c.active?'#6F2DA8':'rgba(58,31,20,0.3)'}}>{c.active?'🟣':'⚫'}</span>
+                        <span className="font-semibold text-sm truncate" style={{color:'#3A1F14'}}>{c.name}</span>
+                        <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{background:'rgba(111,45,168,0.08)',color:'#6F2DA8'}}>{c.action_key}</span>
+                      </div>
+                      <p className="text-xs" style={{color:'rgba(58,31,20,0.4)'}}>
+                        +{c.points} 🪙 · {c.spent} emitidos · {c.allow_multiple?'múltiplas coletas':'1 por usuário'}
+                      </p>
+                    </div>
+                    <div className="flex gap-1 shrink-0 ml-2">
+                      <button onClick={() => toggleActive(c)} className="text-xs px-2 py-1 rounded-lg font-medium"
+                        style={{background:c.active?'rgba(58,31,20,0.06)':'rgba(111,45,168,0.1)', color:c.active?'rgba(58,31,20,0.4)':'#6F2DA8'}}>
+                        {c.active?'Pausar':'Ativar'}
+                      </button>
+                      <button onClick={() => deleteCamp(c)} className="text-xs px-2 py-1 rounded-lg" style={{background:'rgba(194,24,116,0.08)',color:'#C21874'}}>🗑</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Top carteiras */}
           {stats?.topUsers?.length > 0 && (
             <div className="card-junina p-4">
-              <h2 className="font-display font-bold mb-3" style={{color:'#4B1E6D'}}>Top Carteiras 🏆</h2>
+              <h2 className="font-display font-bold mb-3" style={{color:'#4B1E6D'}}>🏆 Top Carteiras</h2>
               <div className="space-y-1.5">
-                {stats.topUsers.map((u, i) => (
+                {stats.topUsers.map((u,i) => (
                   <div key={u.user_id} className="flex items-center justify-between py-1.5 px-3 rounded-xl" style={{background:'rgba(199,154,59,0.06)'}}>
-                    <span className="text-sm" style={{color:'#3A1F14'}}>#{i+1} · user #{u.user_id}</span>
+                    <span className="text-sm" style={{color:'#3A1F14'}}>#{i+1} · usuário #{u.user_id}</span>
                     <span className="font-black text-sm" style={{color:'#C79A3B'}}>{u.balance} 🪙</span>
                   </div>
                 ))}
@@ -241,53 +339,96 @@ export default function AdminPanel() {
       {/* Modal QR */}
       {qrModal && <QrModal campaign={qrModal} onClose={() => setQrModal(null)}/>}
 
-      {/* Modal criar campanha */}
-      {campModal && (
+      {/* Modal criar patrocinador */}
+      {sponsorModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(75,30,109,0.5)',backdropFilter:'blur(4px)'}}
-          onClick={e => e.target===e.currentTarget && setCampModal(false)}>
+          onClick={e => e.target===e.currentTarget && setSponsorModal(false)}>
           <div className="card-junina p-6 w-full max-w-sm animate-pop">
-            <h3 className="font-display text-lg font-bold mb-4" style={{color:'#4B1E6D'}}>Nova Campanha</h3>
-            <form onSubmit={handleCreateCamp} className="space-y-3">
+            <h3 className="font-display text-lg font-bold mb-1" style={{color:'#4B1E6D'}}>Novo Patrocinador</h3>
+            <p className="text-xs mb-4" style={{color:'rgba(58,31,20,0.4)'}}>Gera link + QR code para o patrocinador disponibilizar</p>
+            <form onSubmit={handleCreateSponsor} className="space-y-3">
               <div>
                 <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{color:'#4B1E6D'}}>Nome</label>
-                <input className="input-junina" placeholder="Ex: Barraca do Milho" value={campForm.name} onChange={e=>setCampForm(f=>({...f,name:e.target.value}))} required autoFocus/>
+                <input className="input-junina" placeholder="Ex: Barraca do Milho" value={sponsorForm.name} onChange={e=>setSponsorForm(f=>({...f,name:e.target.value}))} required autoFocus/>
               </div>
               <div>
                 <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{color:'#4B1E6D'}}>Descrição (opcional)</label>
-                <input className="input-junina" placeholder="Ex: Visite a barraca" value={campForm.description} onChange={e=>setCampForm(f=>({...f,description:e.target.value}))}/>
+                <input className="input-junina" placeholder="Ex: Compre e ganhe moedas" value={sponsorForm.description} onChange={e=>setSponsorForm(f=>({...f,description:e.target.value}))}/>
               </div>
               {systems.length > 0 && (
                 <div>
-                  <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{color:'#4B1E6D'}}>Sistema</label>
-                  <select className="input-junina" value={campForm.system_budget_id} onChange={e=>setCampForm(f=>({...f,system_budget_id:e.target.value}))}>
+                  <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{color:'#4B1E6D'}}>Sistema de orçamento</label>
+                  <select className="input-junina" value={sponsorForm.system_budget_id} onChange={e=>setSponsorForm(f=>({...f,system_budget_id:e.target.value}))}>
                     <option value="">Sem sistema (livre)</option>
-                    {systems.map(s => (
-                      <option key={s.id} value={s.id}>{s.name} ({s.available_budget} disponíveis)</option>
-                    ))}
+                    {systems.map(s => <option key={s.id} value={s.id}>{s.name} ({s.available_budget} disponíveis)</option>)}
                   </select>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{color:'#C79A3B'}}>🪙 Pontos/claim</label>
-                  <input type="number" min="1" className="input-junina" value={campForm.points} onChange={e=>setCampForm(f=>({...f,points:e.target.value}))} required/>
+                  <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{color:'#C79A3B'}}>🪙 Moedas/coleta</label>
+                  <input type="number" min="1" className="input-junina" value={sponsorForm.points} onChange={e=>setSponsorForm(f=>({...f,points:e.target.value}))} required/>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{color:'#4B1E6D'}}>Total (opcional)</label>
-                  <input type="number" min="1" className="input-junina" placeholder="ilimitado" value={campForm.budget} onChange={e=>setCampForm(f=>({...f,budget:e.target.value}))}/>
+                  <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{color:'#4B1E6D'}}>Limite total (🪙)</label>
+                  <input type="number" min="1" className="input-junina" placeholder="ilimitado" value={sponsorForm.budget} onChange={e=>setSponsorForm(f=>({...f,budget:e.target.value}))}/>
                 </div>
               </div>
+              {sponsorForm.budget && sponsorForm.points && (
+                <p className="text-xs text-center" style={{color:'rgba(58,31,20,0.5)'}}>
+                  Máximo {Math.floor(parseInt(sponsorForm.budget||0)/parseInt(sponsorForm.points||1))} usuários poderão coletar
+                </p>
+              )}
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={() => setSponsorModal(false)} className="btn-secondary flex-1 text-sm py-2.5">Cancelar</button>
+                <button type="submit" className="btn-primary flex-1 text-sm py-2.5" disabled={saving}>{saving?<LoadingSpinner size="sm"/>:'Criar'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal criar ação de sistema */}
+      {actionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(75,30,109,0.5)',backdropFilter:'blur(4px)'}}
+          onClick={e => e.target===e.currentTarget && setActionModal(false)}>
+          <div className="card-junina p-6 w-full max-w-sm animate-pop">
+            <h3 className="font-display text-lg font-bold mb-1" style={{color:'#4B1E6D'}}>⚡ Ação de Sistema</h3>
+            <p className="text-xs mb-4" style={{color:'rgba(58,31,20,0.4)'}}>Emissão automática quando usuário realiza uma ação</p>
+            <form onSubmit={handleCreateAction} className="space-y-3">
               <div>
-                <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{color:'#6F2DA8'}}>⚡ Action Key (sistemas)</label>
-                <input className="input-junina font-mono text-sm" placeholder="Ex: certidao, missao, match, mensagem..." value={campForm.action_key} onChange={e=>setCampForm(f=>({...f,action_key:e.target.value}))}/>
-                <p className="text-xs mt-1" style={{color:'rgba(58,31,20,0.4)'}}>Chave usada pelos sistemas para emitir moedas automaticamente</p>
+                <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{color:'#4B1E6D'}}>Nome</label>
+                <input className="input-junina" placeholder="Ex: Certidão Gerada" value={actionForm.name} onChange={e=>setActionForm(f=>({...f,name:e.target.value}))} required autoFocus/>
+              </div>
+              <div>
+                <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{color:'#6F2DA8'}}>Action Key</label>
+                <input className="input-junina font-mono" placeholder="certidao / missao / match / mensagem..." value={actionForm.action_key} onChange={e=>setActionForm(f=>({...f,action_key:e.target.value}))} required/>
+              </div>
+              {systems.length > 0 && (
+                <div>
+                  <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{color:'#4B1E6D'}}>Sistema de orçamento</label>
+                  <select className="input-junina" value={actionForm.system_budget_id} onChange={e=>setActionForm(f=>({...f,system_budget_id:e.target.value}))}>
+                    <option value="">Sem sistema (livre)</option>
+                    {systems.map(s => <option key={s.id} value={s.id}>{s.name} ({s.available_budget} disponíveis)</option>)}
+                  </select>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{color:'#C79A3B'}}>🪙 Moedas</label>
+                  <input type="number" min="1" className="input-junina" value={actionForm.points} onChange={e=>setActionForm(f=>({...f,points:e.target.value}))} required/>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{color:'#4B1E6D'}}>Limite (🪙)</label>
+                  <input type="number" min="1" className="input-junina" placeholder="ilimitado" value={actionForm.budget} onChange={e=>setActionForm(f=>({...f,budget:e.target.value}))}/>
+                </div>
               </div>
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={campForm.allow_multiple} onChange={e=>setCampForm(f=>({...f,allow_multiple:e.target.checked}))} className="accent-purple-600"/>
-                <span className="text-sm font-semibold" style={{color:'#4B1E6D'}}>Permitir múltiplas coletas por usuário</span>
+                <input type="checkbox" checked={actionForm.allow_multiple} onChange={e=>setActionForm(f=>({...f,allow_multiple:e.target.checked}))} className="accent-purple-600"/>
+                <span className="text-sm font-semibold" style={{color:'#4B1E6D'}}>Múltiplas coletas por usuário</span>
               </label>
               <div className="flex gap-2 pt-1">
-                <button type="button" onClick={() => setCampModal(false)} className="btn-secondary flex-1 text-sm py-2.5">Cancelar</button>
+                <button type="button" onClick={() => setActionModal(false)} className="btn-secondary flex-1 text-sm py-2.5">Cancelar</button>
                 <button type="submit" className="btn-primary flex-1 text-sm py-2.5" disabled={saving}>{saving?<LoadingSpinner size="sm"/>:'Criar'}</button>
               </div>
             </form>
@@ -300,11 +441,10 @@ export default function AdminPanel() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(75,30,109,0.5)',backdropFilter:'blur(4px)'}}
           onClick={e => e.target===e.currentTarget && setSysModal(false)}>
           <div className="card-junina p-6 w-full max-w-sm animate-pop">
-            <h3 className="font-display text-lg font-bold mb-4" style={{color:'#4B1E6D'}}>Novo Sistema</h3>
-            <p className="text-xs mb-4" style={{color:'rgba(58,31,20,0.5)'}}>Define um orçamento de moedas para um sistema do evento</p>
+            <h3 className="font-display text-lg font-bold mb-4" style={{color:'#4B1E6D'}}>🏦 Novo Sistema</h3>
             <form onSubmit={handleCreateSys} className="space-y-3">
               <div>
-                <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{color:'#4B1E6D'}}>Nome do sistema</label>
+                <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{color:'#4B1E6D'}}>Nome</label>
                 <input className="input-junina" placeholder="Ex: Bingo, Barracas, Slot Machine" value={sysForm.name} onChange={e=>setSysForm(f=>({...f,name:e.target.value}))} required autoFocus/>
               </div>
               <div>
@@ -313,7 +453,7 @@ export default function AdminPanel() {
               </div>
               <div className="flex gap-2 pt-1">
                 <button type="button" onClick={() => setSysModal(false)} className="btn-secondary flex-1 text-sm py-2.5">Cancelar</button>
-                <button type="submit" className="btn-primary flex-1 text-sm py-2.5" disabled={saving}>{saving?<LoadingSpinner size="sm"/>:'Criar Sistema'}</button>
+                <button type="submit" className="btn-primary flex-1 text-sm py-2.5" disabled={saving}>{saving?<LoadingSpinner size="sm"/>:'Criar'}</button>
               </div>
             </form>
           </div>
